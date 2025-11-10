@@ -1,11 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 import { Scores } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
+// We no longer initialize the 'ai' instance here, because the API key is not available when the module first loads.
+// We will create it inside each function just before we need it.
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAiClient = (): GoogleGenAI => {
+    // We've configured Netlify to create this global variable and inject our API key into it.
+    const apiKey = (window as any).GEMINI_API_KEY;
+    
+    if (!apiKey) {
+        // This error will be visible in the user's browser console.
+        console.error("Gemini API key is not configured. Follow the Netlify deployment guide to set it up.");
+        throw new Error("API_KEY is not available. Please check the deployment configuration.");
+    }
+
+    return new GoogleGenAI({ apiKey });
+}
 
 function formatPrompt(scores: Scores): string {
   const { A, B, C, D } = scores;
@@ -40,7 +50,7 @@ function formatPrompt(scores: Scores): string {
 תאר בפסקה אחת את סגנון התקשורת והניהול הכללי של המשתמש, בהתבסס על שילוב הציונים. זוהי תמצית הפרופיל שלו.
 
 **נקודות החוזק המרכזיות שלך**
-בפסקה רציפה, תאר את החוזקות העיקריות הנובעות מהפרופיל. התמקד בתכונות החיוביות הבולטות ביותר וכיצד הן באות לידי ביטוי בסביבת עבודה ובתקשורת בינאישית.
+בפסקה רציפה, תאר את החוזקות העיקריות הנובעות מהפרופיל. התמקד בתכונות החיוביות הבולטות ביותר וכיצד הן באות לידי בידי ביטוי בסביבת עבודה ובתקשורת בינאישית.
 
 **אתגרים פוטנציאליים ונקודות לצמיחה**
 בפסקה נפרדת, תאר את ה"חולשות" או האתגרים האפשריים. הצג אותם כצד השני של החוזקות, או כנטיות טבעיות שיש להיות מודעים אליהן. השתמש בגישה בונה ומעצימה.
@@ -87,6 +97,7 @@ function formatScenarioPrompt(scores: Scores, scenario: string): string {
 
 const callGemini = async (prompt: string): Promise<string> => {
      try {
+        const ai = getAiClient(); // Create the client with the key
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -95,6 +106,9 @@ const callGemini = async (prompt: string): Promise<string> => {
         return response.text;
     } catch (error) {
         console.error("Error calling Gemini API:", error);
+        if (error instanceof Error && error.message.includes('API key not valid')) {
+             throw new Error("The provided Gemini API key is not valid. Please check it in your Netlify settings.");
+        }
         throw new Error("Failed to generate analysis from Gemini API.");
     }
 }
